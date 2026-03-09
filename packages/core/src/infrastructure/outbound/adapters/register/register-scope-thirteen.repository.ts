@@ -69,7 +69,7 @@ export class RegisterScopeThirteenRepository extends BaseSoapRepository implemen
             } as any);
 
             const personaReturn = output.personaReturn;
-            if (!personaReturn || !personaReturn.persona) {
+            if (!personaReturn) {
                 return null;
             }
 
