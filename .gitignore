@@ -31,3 +31,5 @@ nx-graph.json
 
 # TypeScript
 *.tsbuildinfo
+
+.npmrc

@@ -1,6 +1,6 @@
 {
-    "name": "arcasdk",
-    "version": "0.1.0",
+    "name": "@c0sm1cdus7/arcasdk",
+    "version": "0.1.1",
     "description": "Arca TypeScript SDK Monorepo",
     "private": true,
     "workspaces": [
@@ -38,9 +38,12 @@
         "vitepress": "^1.6.4",
         "vitepress-plugin-mermaid": "^2.0.17"
     },
+    "publishConfig": {
+        "registry": "https://npm.pkg.github.com"
+    },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/ralcorta/arcasdk.git"
+        "url": "git+https://github.com/c0sm1cdus7/arcasdk.git"
     },
     "bugs": {
         "url": "https://github.com/ralcorta/arcasdk/issues"
