@@ -66,7 +66,7 @@ export class RegisterInscriptionProofRepository extends BaseSoapRepository imple
             } as any);
 
             const personaReturn = output.personaReturn;
-            if (!personaReturn || (!(personaReturn as any).persona && !(personaReturn as TaxpayerDetailsDto).tipoPersona)) {
+            if (!personaReturn || (!(personaReturn as any).persona && !(personaReturn as any).datosGenerales)) {
                 return null;
             }
 

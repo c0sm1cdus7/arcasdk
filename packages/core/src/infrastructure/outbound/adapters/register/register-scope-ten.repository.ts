@@ -69,7 +69,7 @@ export class RegisterScopeTenRepository extends BaseSoapRepository implements IR
             } as any);
 
             const personaReturn = output.personaReturn;
-            if (!personaReturn || (!personaReturn.persona && !(personaReturn as TaxpayerDetailsDto).tipoPersona)) {
+            if (!personaReturn || !personaReturn.persona) {
                 return null;
             }
 

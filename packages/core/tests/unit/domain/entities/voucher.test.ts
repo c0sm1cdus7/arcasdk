@@ -115,8 +115,26 @@ describe("Voucher Entity", () => {
         ImpTotal: 150, // Should be 131
       };
       expect(() => Voucher.create(invalidData)).toThrow(
-        "El campo 'Importe Total' ImpTotal (150), debe ser igual a la suma de ImpNeto (100) + ImpTrib (10) + ImpIVA (21) = 131."
+        "El campo 'Importe Total' ImpTotal (150), debe ser igual a la suma de ImpTotConc (0) + ImpNeto (100) + ImpOpEx (0) + ImpTrib (10) + ImpIVA (21) = 131."
       );
+    });
+
+    it("should accept ImpTotal that includes untaxed (ImpTotConc) and exempt (ImpOpEx) amounts", () => {
+      // AFIP's documented FECAESolicitar formula:
+      // ImpTotal = ImpTotConc + ImpNeto + ImpOpEx + ImpTrib + ImpIVA.
+      // The old validator omitted ImpTotConc/ImpOpEx and rejected every voucher
+      // carrying no-gravado or exento lines.
+      const validData: IVoucher = {
+        ...data,
+        CbteTipo: 1, // Factura A
+        ImpTotConc: 50,
+        ImpNeto: 100,
+        ImpOpEx: 30,
+        ImpTrib: 10,
+        ImpIVA: 21,
+        ImpTotal: 211,
+      };
+      expect(() => Voucher.create(validData)).not.toThrow();
     });
 
     it("should throw error if Concepto is invalid", () => {

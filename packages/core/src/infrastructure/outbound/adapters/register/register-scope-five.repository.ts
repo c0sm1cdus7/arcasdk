@@ -69,7 +69,7 @@ export class RegisterScopeFiveRepository extends BaseSoapRepository implements I
             } as any);
 
             const personaReturn = output.personaReturn;
-            if (!personaReturn || (!(personaReturn as any).persona && !(personaReturn as TaxpayerDetailsDto).tipoPersona)) {
+            if (!personaReturn || !(personaReturn as any).persona) {
                 return null;
             }
 

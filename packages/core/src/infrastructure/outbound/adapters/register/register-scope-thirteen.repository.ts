@@ -69,13 +69,13 @@ export class RegisterScopeThirteenRepository extends BaseSoapRepository implemen
             } as any);
 
             const personaReturn = output.personaReturn;
-            if (!personaReturn || (!personaReturn.persona && !(personaReturn as TaxpayerDetailsDto).tipoPersona)) {
+            if (!personaReturn || !personaReturn.persona) {
                 return null;
             }
 
             return this.mapPersonaReturnToDto(personaReturn);
         } catch (error: any) {
-            if (error?.code === 602 || error?.message?.includes("no existe")) {
+            if (error?.code === 602 || error?.message?.includes("existe")) {
                 return null;
             }
             throw error;
@@ -99,7 +99,7 @@ export class RegisterScopeThirteenRepository extends BaseSoapRepository implemen
                 errorConstancia: undefined
             };
         } catch (error: any) {
-            if (error?.code === 602 || error?.message?.includes("no existe")) {
+            if (error?.code === 602 || error?.message?.includes("existe")) {
                 return {
                     idPersona: [],
                     errorConstancia: undefined

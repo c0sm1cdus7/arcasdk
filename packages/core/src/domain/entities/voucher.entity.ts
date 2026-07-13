@@ -82,12 +82,19 @@ export class Voucher {
       }
     }
 
-    // Validate Total Calculation
+    // Validate Total Calculation — AFIP's documented FECAESolicitar formula:
+    // ImpTotal = ImpTotConc (no gravado) + ImpNeto (gravado) + ImpOpEx (exento) + ImpTrib + ImpIVA.
+    // Omitting ImpTotConc/ImpOpEx rejected every voucher carrying untaxed or exempt amounts
+    // (an RI selling to an exempt counterparty, any No Gravado line).
     const calculatedTotal =
-      this.data.ImpNeto + this.data.ImpTrib + this.data.ImpIVA;
+      (this.data.ImpTotConc ?? 0) +
+      this.data.ImpNeto +
+      (this.data.ImpOpEx ?? 0) +
+      this.data.ImpTrib +
+      this.data.ImpIVA;
     if (Math.abs(this.data.ImpTotal - calculatedTotal) > 0.01) {
       throw new Error(
-        `El campo 'Importe Total' ImpTotal (${this.data.ImpTotal}), debe ser igual a la suma de ImpNeto (${this.data.ImpNeto}) + ImpTrib (${this.data.ImpTrib}) + ImpIVA (${this.data.ImpIVA}) = ${calculatedTotal}.`
+        `El campo 'Importe Total' ImpTotal (${this.data.ImpTotal}), debe ser igual a la suma de ImpTotConc (${this.data.ImpTotConc ?? 0}) + ImpNeto (${this.data.ImpNeto}) + ImpOpEx (${this.data.ImpOpEx ?? 0}) + ImpTrib (${this.data.ImpTrib}) + ImpIVA (${this.data.ImpIVA}) = ${calculatedTotal}.`
       );
     }
 
