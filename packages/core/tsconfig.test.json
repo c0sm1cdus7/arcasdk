@@ -5,6 +5,7 @@
     "types": ["jest", "node"],
     "baseUrl": "./",
     "paths": {
+      "@arcasdk/core/*": ["./*"],
       "@domain/*": ["src/domain/*"],
       "@application/*": ["src/application/*"],
       "@infrastructure/*": ["src/infrastructure/*"]

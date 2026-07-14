@@ -9,6 +9,7 @@ jest.mock("fs", () => ({
   promises: {
     mkdir: jest.fn(),
     writeFile: jest.fn(),
+    rename: jest.fn(),
     readFile: jest.fn(),
     access: jest.fn(),
     unlink: jest.fn(),
@@ -62,15 +63,18 @@ describe("FileSystemTicketStorage", () => {
 
       (fs.mkdir as jest.Mock).mockResolvedValue(undefined);
       (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (fs.rename as jest.Mock).mockResolvedValue(undefined);
 
       await storage.save(ticket, serviceName);
 
       const expectedFileName = `TA-${cuit}-${serviceName}.json`;
       const expectedPath = resolve(ticketPath, expectedFileName);
+      const expectedTmpPath = `${expectedPath}.${process.pid}.tmp`;
 
       expect(fs.mkdir).toHaveBeenCalledWith(ticketPath, { recursive: true });
+      // Atomic write: temp file then rename over the target.
       expect(fs.writeFile).toHaveBeenCalledWith(
-        expectedPath,
+        expectedTmpPath,
         JSON.stringify(
           {
             header: ticket.getHeaders(),
@@ -81,6 +85,7 @@ describe("FileSystemTicketStorage", () => {
         ),
         "utf8"
       );
+      expect(fs.rename).toHaveBeenCalledWith(expectedTmpPath, expectedPath);
     });
 
     it("should include -production suffix when production is true", async () => {
@@ -94,17 +99,20 @@ describe("FileSystemTicketStorage", () => {
 
       (fs.mkdir as jest.Mock).mockResolvedValue(undefined);
       (fs.writeFile as jest.Mock).mockResolvedValue(undefined);
+      (fs.rename as jest.Mock).mockResolvedValue(undefined);
 
       await productionStorage.save(ticket, serviceName);
 
       const expectedFileName = `TA-${cuit}-${serviceName}-production.json`;
       const expectedPath = resolve(ticketPath, expectedFileName);
+      const expectedTmpPath = `${expectedPath}.${process.pid}.tmp`;
 
       expect(fs.writeFile).toHaveBeenCalledWith(
-        expectedPath,
+        expectedTmpPath,
         expect.any(String),
         "utf8"
       );
+      expect(fs.rename).toHaveBeenCalledWith(expectedTmpPath, expectedPath);
     });
 
     it("should throw error if mkdir fails", async () => {
@@ -184,7 +192,7 @@ describe("FileSystemTicketStorage", () => {
       expect(ticket).toBeNull();
     });
 
-    it("should throw error if file contains invalid JSON", async () => {
+    it("should return null and self-heal (delete) if file contains invalid JSON", async () => {
       const serviceName = ServiceNamesEnum.WSFE;
       const invalidJson = "{ invalid json }";
 
@@ -192,13 +200,16 @@ describe("FileSystemTicketStorage", () => {
         .mockResolvedValueOnce(undefined) // F_OK check
         .mockResolvedValueOnce(undefined); // R_OK check
       (fs.readFile as jest.Mock).mockResolvedValue(invalidJson);
+      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
 
-      await expect(storage.get(serviceName)).rejects.toThrow(
-        "Invalid access ticket format"
-      );
+      // A corrupt ticket must NOT throw (that would permanently brick auth) — it is treated as a
+      // cache miss and removed so a fresh ticket can be fetched.
+      const ticket = await storage.get(serviceName);
+      expect(ticket).toBeNull();
+      expect(fs.unlink).toHaveBeenCalled();
     });
 
-    it("should throw error if ticket data is invalid", async () => {
+    it("should return null and self-heal if ticket data is invalid", async () => {
       const serviceName = ServiceNamesEnum.WSFE;
       const invalidTicketData = { invalid: "data" };
       const fileData = JSON.stringify(invalidTicketData);
@@ -207,10 +218,11 @@ describe("FileSystemTicketStorage", () => {
         .mockResolvedValueOnce(undefined) // F_OK check
         .mockResolvedValueOnce(undefined); // R_OK check
       (fs.readFile as jest.Mock).mockResolvedValue(fileData);
+      (fs.unlink as jest.Mock).mockResolvedValue(undefined);
 
-      await expect(storage.get(serviceName)).rejects.toThrow(
-        "Invalid access ticket format"
-      );
+      const ticket = await storage.get(serviceName);
+      expect(ticket).toBeNull();
+      expect(fs.unlink).toHaveBeenCalled();
     });
   });
 

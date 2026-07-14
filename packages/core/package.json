@@ -1,6 +1,6 @@
 {
     "name": "@c0sm1cdus7/arcasdk-core",
-    "version": "0.4.12",
+    "version": "0.6.0",
     "description": "Arca TypeScript SDK - Core package for AFIP/ARCA integration",
     "source": "src/index.ts",
     "main": "lib/index.js",
@@ -14,7 +14,7 @@
         "test:integration:manual": "jest ./tests/integration/electronic-billing-manual-tokens.integration.test.ts",
         "test:integration:auto": "jest ./tests/integration/electronic-billing.integration.test.ts",
         "generate:wsdl-strings": "node scripts/generate-wsdl-strings.js",
-        "prepublishOnly": "npm run build"
+        "prepublishOnly": "rimraf lib tsconfig.build.tsbuildinfo && npm run build"
     },
     "dependencies": {
         "dotenv": "^16.3.1",
@@ -45,7 +45,7 @@
     "author": "valiuLab",
     "license": "ISC",
     "publishConfig": {
-        "registry": "https://npm.pkg.github.com",
+        "registry": "https://registry.npmjs.org",
         "access": "public"
     },
     "repository": {

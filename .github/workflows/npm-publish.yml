@@ -21,7 +21,7 @@ jobs:
           registry-url: https://registry.npmjs.org/
           node-version: "22"
           cache: "npm"
-          scope: "@arcasdk"
+          scope: "@c0sm1cdus7"
 
       - name: Install dependencies
         run: npm ci

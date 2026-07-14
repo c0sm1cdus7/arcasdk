@@ -557,6 +557,10 @@ export namespace ServiceSoapTypes {
     MonId: string;
     /** http://ar.gov.afip.dif.FEV1/#s:double(undefined) */
     MonCotiz: number;
+    /** http://ar.gov.afip.dif.FEV1/#s:string(undefined) */
+    CanMisMonExt?: string;
+    /** http://ar.gov.afip.dif.FEV1/#s:int(undefined) */
+    CondicionIVAReceptorId?: number;
     CbtesAsoc?: ServiceSoapTypes.ICbtesAsoc;
     Tributos?: ServiceSoapTypes.ITributos;
     Iva?: ServiceSoapTypes.IIva;
@@ -770,16 +774,20 @@ export namespace ServiceSoapTypes {
     MonId: string;
     /** http://ar.gov.afip.dif.FEV1/#s:double(undefined) */
     MonCotiz: number;
-    CbtesAsoc: ServiceSoapTypes.ICbtesAsoc;
-    Tributos: ServiceSoapTypes.ITributos;
-    Iva: ServiceSoapTypes.IIva;
-    Opcionales: ServiceSoapTypes.IOpcionales;
-    Compradores: ServiceSoapTypes.ICompradores;
-    PeriodoAsoc: ServiceSoapTypes.IPeriodoAsoc;
+    /** http://ar.gov.afip.dif.FEV1/#s:string(undefined) */
+    CanMisMonExt?: string;
+    /** http://ar.gov.afip.dif.FEV1/#s:int(undefined) */
+    CondicionIVAReceptorId?: number;
+    CbtesAsoc?: ServiceSoapTypes.ICbtesAsoc;
+    Tributos?: ServiceSoapTypes.ITributos;
+    Iva?: ServiceSoapTypes.IIva;
+    Opcionales?: ServiceSoapTypes.IOpcionales;
+    Compradores?: ServiceSoapTypes.ICompradores;
+    PeriodoAsoc?: ServiceSoapTypes.IPeriodoAsoc;
     /** http://ar.gov.afip.dif.FEV1/#s:string(undefined) */
     CAEA: string;
     /** http://ar.gov.afip.dif.FEV1/#s:string(undefined) */
-    CbteFchHsGen: string;
+    CbteFchHsGen?: string;
   }
   export interface IFeCAEARegInfReq {
     FeCabReq: ServiceSoapTypes.IFeCabReq;

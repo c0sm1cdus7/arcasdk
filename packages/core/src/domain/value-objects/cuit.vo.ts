@@ -42,15 +42,17 @@ export class CUIT {
       throw new Error("CUIT inválido: no puede ser 0");
     }
 
-    // Validar dígito verificador (opcional, pero recomendado)
+    // Validar dígito verificador (mod-11). El checksum de un CUIT es determinístico:
+    // si no coincide, el CUIT es inválido — no existe un caso válido que lo falle.
     if (!this.isValidChecksum(cuitStr)) {
-      // No lanzamos error aquí, solo validamos formato básico
-      // El checksum puede fallar en algunos casos válidos
+      throw new Error(
+        `CUIT inválido: dígito verificador incorrecto ("${cuitStr}")`
+      );
     }
   }
 
   /**
-   * Validates CUIT checksum (dígito verificador)
+   * Validates CUIT checksum (dígito verificador) using the AFIP mod-11 algorithm.
    * @param cuitStr CUIT as string
    * @returns true if checksum is valid
    */
@@ -62,8 +64,11 @@ export class CUIT {
       sum += parseInt(cuitStr[i], 10) * multipliers[i];
     }
 
-    const remainder = sum % 11;
-    const checkDigit = remainder < 2 ? remainder : 11 - remainder;
+    const mod = sum % 11;
+    // Verificador = 11 - mod, con 11 -> 0. Cuando mod === 1 el verificador sería 10,
+    // que no es un dígito válido, por lo que ningún CUIT válido cae en ese caso
+    // (queda correctamente rechazado al no coincidir con un único dígito 0-9).
+    const checkDigit = mod === 0 ? 0 : 11 - mod;
     const lastDigit = parseInt(cuitStr[10], 10);
 
     return checkDigit === lastDigit;

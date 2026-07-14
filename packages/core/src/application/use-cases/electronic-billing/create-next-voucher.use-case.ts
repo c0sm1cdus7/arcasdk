@@ -5,7 +5,7 @@
 import { IElectronicBillingRepositoryPort } from "@application/ports/electronic-billing/electronic-billing-repository.port";
 import { Voucher } from "@domain/entities/voucher.entity";
 import { ICreateVoucherResult } from "@application/types/result.types";
-import { INextVoucher } from "@domain/types/voucher.types";
+import { INextVoucher, IVoucher } from "@domain/types/voucher.types";
 
 export class CreateNextVoucherUseCase {
   constructor(
@@ -27,15 +27,16 @@ export class CreateNextVoucherUseCase {
     const lastVoucherNumber = lastVoucher.cbteNro || 0;
     const nextVoucherNumber = lastVoucherNumber + 1;
 
-    // Build complete voucher data
-    const voucherData: INextVoucher = {
+    // Build complete voucher data. INextVoucher only makes CbteDesde/CbteHasta optional; setting
+    // both here produces a complete IVoucher, so no unsafe `as any` is needed.
+    const voucherData: IVoucher = {
       ...nextVoucherData,
       CbteDesde: nextVoucherNumber,
       CbteHasta: nextVoucherNumber,
     };
 
     // Create domain entity
-    const voucher = Voucher.create(voucherData as any);
+    const voucher = Voucher.create(voucherData);
 
     // Use repository to create voucher
     return this.electronicBillingRepository.createVoucher(voucher);

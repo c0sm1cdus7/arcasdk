@@ -59,6 +59,13 @@ export class Voucher {
       throw new Error("Los números de comprobante no pueden ser negativos.");
     }
 
+    // ARCA voucher numbers are at most 8 digits (1..99999999).
+    if (this.data.CbteDesde > 99999999 || this.data.CbteHasta > 99999999) {
+      throw new Error(
+        "Los números de comprobante no pueden superar 99999999 (8 dígitos)."
+      );
+    }
+
     // Validate CantReg
     const expectedCantReg = this.data.CbteHasta - this.data.CbteDesde + 1;
     if (this.data.CantReg !== expectedCantReg) {
@@ -86,15 +93,17 @@ export class Voucher {
     // ImpTotal = ImpTotConc (no gravado) + ImpNeto (gravado) + ImpOpEx (exento) + ImpTrib + ImpIVA.
     // Omitting ImpTotConc/ImpOpEx rejected every voucher carrying untaxed or exempt amounts
     // (an RI selling to an exempt counterparty, any No Gravado line).
-    const calculatedTotal =
-      (this.data.ImpTotConc ?? 0) +
-      this.data.ImpNeto +
-      (this.data.ImpOpEx ?? 0) +
-      this.data.ImpTrib +
-      this.data.ImpIVA;
+    // Coalesce every component to 0 so a missing amount can't turn the sum into NaN and
+    // silently bypass the check (NaN > 0.01 is false).
+    const impTotConc = this.data.ImpTotConc ?? 0;
+    const impNeto = this.data.ImpNeto ?? 0;
+    const impOpEx = this.data.ImpOpEx ?? 0;
+    const impTrib = this.data.ImpTrib ?? 0;
+    const impIVA = this.data.ImpIVA ?? 0;
+    const calculatedTotal = impTotConc + impNeto + impOpEx + impTrib + impIVA;
     if (Math.abs(this.data.ImpTotal - calculatedTotal) > 0.01) {
       throw new Error(
-        `El campo 'Importe Total' ImpTotal (${this.data.ImpTotal}), debe ser igual a la suma de ImpTotConc (${this.data.ImpTotConc ?? 0}) + ImpNeto (${this.data.ImpNeto}) + ImpOpEx (${this.data.ImpOpEx ?? 0}) + ImpTrib (${this.data.ImpTrib}) + ImpIVA (${this.data.ImpIVA}) = ${calculatedTotal}.`
+        `El campo 'Importe Total' ImpTotal (${this.data.ImpTotal}), debe ser igual a la suma de ImpTotConc (${impTotConc}) + ImpNeto (${impNeto}) + ImpOpEx (${impOpEx}) + ImpTrib (${impTrib}) + ImpIVA (${impIVA}) = ${calculatedTotal}.`
       );
     }
 
@@ -109,6 +118,36 @@ export class Voucher {
       );
     }
 
+    // For Servicios (2) and Productos y Servicios (3) ARCA requires the service period dates
+    // and the payment due date.
+    if (this.data.Concepto === 2 || this.data.Concepto === 3) {
+      if (
+        !this.data.FchServDesde ||
+        !this.data.FchServHasta ||
+        !this.data.FchVtoPago
+      ) {
+        throw new Error(
+          "Para Concepto 2 (Servicios) o 3 (Productos y Servicios) se requieren FchServDesde, FchServHasta y FchVtoPago."
+        );
+      }
+    }
+
+    // ARCA dates must be yyyymmdd (8 digits). Validate any provided date; an empty CbteFch is
+    // allowed (ARCA defaults it to the current date).
+    const dateFields: Array<[string, string | undefined]> = [
+      ["CbteFch", this.data.CbteFch],
+      ["FchServDesde", this.data.FchServDesde],
+      ["FchServHasta", this.data.FchServHasta],
+      ["FchVtoPago", this.data.FchVtoPago],
+    ];
+    for (const [name, value] of dateFields) {
+      if (value && !/^\d{8}$/.test(value)) {
+        throw new Error(
+          `Fecha inválida en ${name} ("${value}"). Debe tener formato yyyymmdd.`
+        );
+      }
+    }
+
     // Validate Document Type
     if (!this.data.DocTipo || this.data.DocTipo <= 0) {
       throw new Error("Tipo de documento inválido.");
@@ -121,6 +160,30 @@ export class Voucher {
 
     if (!this.data.MonCotiz || this.data.MonCotiz <= 0) {
       throw new Error("Cotización de moneda (MonCotiz) debe ser mayor a cero.");
+    }
+
+    // For pesos argentinos (PES) ARCA requires the quotation to be exactly 1.
+    if (this.data.MonId === "PES" && this.data.MonCotiz !== 1) {
+      throw new Error(
+        "Para moneda PES (pesos argentinos) la cotización (MonCotiz) debe ser 1."
+      );
+    }
+
+    // Validate CanMisMonExt ("cancela en misma moneda extranjera"): optional flag that only
+    // makes sense for foreign-currency vouchers. When set to "S" the comprobante is collected
+    // in the foreign currency itself (ARCA then requires MonCotiz to match its official rate).
+    if (this.data.CanMisMonExt !== undefined) {
+      if (this.data.CanMisMonExt !== "S" && this.data.CanMisMonExt !== "N") {
+        throw new Error(
+          'CanMisMonExt inválido. Debe ser "S" (se cancela en moneda extranjera) o "N" (se cancela en pesos).'
+        );
+      }
+
+      if (this.data.CanMisMonExt === "S" && this.data.MonId === "PES") {
+        throw new Error(
+          'CanMisMonExt="S" no es válido para comprobantes en pesos (MonId="PES").'
+        );
+      }
     }
   }
 

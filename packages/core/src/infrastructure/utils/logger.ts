@@ -3,7 +3,8 @@ import { createLogger, format, transports, Logger } from "winston";
 export function createArcaLogger(enableLogging: boolean = false): Logger {
   const logger = createLogger({
     format: format.json(),
-    exitOnError: true,
+    // A library must never terminate the host process because of a logging error.
+    exitOnError: false,
     silent: !enableLogging,
   });
 

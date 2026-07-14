@@ -43,6 +43,7 @@ import {
     mapAliquotTypes,
     mapIvaReceptorTypes,
     mapSoapErrors,
+    mapObservations,
     mapCaea,
     mapCaeaUsage,
     mapCaeaNoMovement,
@@ -132,6 +133,10 @@ export class ElectronicBillingRepository extends BaseSoapRepository implements I
         const client = await this.getClient();
         const voucherData = voucher.toDTO();
 
+        // Field order MUST follow the WSFEv1 FEDetRequest xsd:sequence declared in the WSDL:
+        // ...ImpOpEx, ImpTrib, ImpIVA, ...MonCotiz, CanMisMonExt, CondicionIVAReceptorId,
+        // CbtesAsoc, Tributos, Iva, Opcionales, Compradores. node-soap serializes in object-key
+        // order, so keeping the literal in schema order keeps the wire XML schema-conformant.
         const detRequest = {
             Concepto: voucherData.Concepto,
             DocTipo: voucherData.DocTipo,
@@ -143,19 +148,20 @@ export class ElectronicBillingRepository extends BaseSoapRepository implements I
             ImpTotConc: voucherData.ImpTotConc,
             ImpNeto: voucherData.ImpNeto,
             ImpOpEx: voucherData.ImpOpEx,
-            ImpIVA: voucherData.ImpIVA,
             ImpTrib: voucherData.ImpTrib,
+            ImpIVA: voucherData.ImpIVA,
             FchServDesde: voucherData.FchServDesde,
             FchServHasta: voucherData.FchServHasta,
             FchVtoPago: voucherData.FchVtoPago,
             MonId: voucherData.MonId,
             MonCotiz: voucherData.MonCotiz,
+            CanMisMonExt: voucherData.CanMisMonExt,
             CondicionIVAReceptorId: voucherData.CondicionIVAReceptorId,
+            CbtesAsoc: voucherData.CbtesAsoc ? { CbteAsoc: voucherData.CbtesAsoc } : undefined,
             Tributos: voucherData.Tributos ? { Tributo: voucherData.Tributos } : undefined,
             Iva: voucherData.Iva ? { AlicIva: voucherData.Iva } : undefined,
-            CbtesAsoc: voucherData.CbtesAsoc ? { CbteAsoc: voucherData.CbtesAsoc } : undefined,
-            Compradores: voucherData.Compradores ? { Comprador: voucherData.Compradores } : undefined,
-            Opcionales: voucherData.Opcionales ? { Opcional: voucherData.Opcionales } : undefined
+            Opcionales: voucherData.Opcionales ? { Opcional: voucherData.Opcionales } : undefined,
+            Compradores: voucherData.Compradores ? { Comprador: voucherData.Compradores } : undefined
         };
 
         const typedDetRequest = this.useSoap12 ? (detRequest as ServiceSoap12Types.IFECAEDetRequest) : (detRequest as ServiceSoapTypes.IFECAEDetRequest);
@@ -175,50 +181,74 @@ export class ElectronicBillingRepository extends BaseSoapRepository implements I
 
         const { FECAESolicitarResult } = output;
         const detResponse = FECAESolicitarResult.FeDetResp?.FECAEDetResponse?.[0];
+        const resultado = detResponse?.Resultado;
+        const observaciones = mapObservations(detResponse?.Observaciones);
 
-        if (FECAESolicitarResult.Errors?.Err?.length && this.logger) {
-            const errorMessages = FECAESolicitarResult.Errors.Err.map((e) => `${e.Code}: ${e.Msg}`).join(", ");
-            this.logger.error(`Error creating voucher: ${errorMessages}`);
+        if (this.logger) {
+            if (FECAESolicitarResult.Errors?.Err?.length) {
+                const errorMessages = FECAESolicitarResult.Errors.Err.map((e) => `${e.Code}: ${e.Msg}`).join(", ");
+                this.logger.error(`Error creating voucher: ${errorMessages}`);
+            }
+            // A rejected voucher (Resultado="R") carries the reason ONLY in Observaciones —
+            // surface it so callers/logs can see why ARCA did not authorize the comprobante.
+            if (observaciones?.length) {
+                const obsMessages = observaciones.map((o) => `${o.code}: ${o.msg}`).join(", ");
+                if (resultado !== "A") {
+                    this.logger.error(`Voucher not authorized (Resultado=${resultado ?? "?"}): ${obsMessages}`);
+                } else {
+                    this.logger.warn(`Voucher authorized with observations: ${obsMessages}`);
+                }
+            }
         }
 
-        const cae = detResponse?.Resultado === "A" ? detResponse.CAE || "" : "";
-        const caeFchVto = detResponse?.Resultado === "A" ? detResponse.CAEFchVto || "" : "";
+        const cae = resultado === "A" ? detResponse?.CAE || "" : "";
+        const caeFchVto = resultado === "A" ? detResponse?.CAEFchVto || "" : "";
 
         return {
             response: FECAESolicitarResult,
             cae,
-            caeFchVto
+            caeFchVto,
+            resultado,
+            observaciones
         };
     }
 
     async getVoucherInfo(number: number, salesPoint: number, type: number): Promise<VoucherInfoResultDto | null> {
         const client = await this.getClient();
 
-        try {
-            const [output] = await client.FECompConsultarAsync({
-                FeCompConsReq: {
-                    CbteNro: number,
-                    PtoVta: salesPoint,
-                    CbteTipo: type
-                }
-            });
+        const [output] = await client.FECompConsultarAsync({
+            FeCompConsReq: {
+                CbteNro: number,
+                PtoVta: salesPoint,
+                CbteTipo: type
+            }
+        });
 
-            const result = output.FECompConsultarResult;
-            const voucherInfo = mapVoucherInfo(result);
-            if (!voucherInfo) {
-                return null;
-            }
-            return {
-                ...voucherInfo,
-                errors: mapSoapErrors(result.Errors) ? { err: mapSoapErrors(result.Errors)! } : undefined
-            };
-        } catch (error: any) {
-            // Error 602 means voucher not found
-            if (error?.code === 602) {
-                return null;
-            }
-            throw error;
+        const result = output.FECompConsultarResult;
+        const errors = mapSoapErrors(result.Errors);
+
+        // ARCA reports "no existe" as error 602 INSIDE the Errors array (not as a thrown SOAP
+        // fault), alongside an empty ResultGet. Only that case means "voucher not found".
+        if (errors?.some((e) => e.code === 602)) {
+            return null;
         }
+
+        const voucherInfo = mapVoucherInfo(result);
+        if (!voucherInfo) {
+            // No ResultGet and not a 602 → a genuine error (auth, invalid params, service down).
+            // Surface it instead of silently masking it as "not found".
+            if (errors?.length) {
+                throw new Error(
+                    `FECompConsultar failed: ${errors.map((e) => `${e.code}: ${e.msg}`).join(", ")}`
+                );
+            }
+            return null;
+        }
+
+        return {
+            ...voucherInfo,
+            errors: errors ? { err: errors } : undefined
+        };
     }
 
     async getVoucherTypes(): Promise<VoucherTypesResultDto> {
@@ -383,6 +413,9 @@ export class ElectronicBillingRepository extends BaseSoapRepository implements I
         const client = await this.getClient();
         const voucherData = voucher.toDTO();
 
+        // Order follows the WSFEv1 FECAEADetRequest schema: the base FEDetRequest sequence
+        // (…ImpTrib, ImpIVA, …MonCotiz, CanMisMonExt, CondicionIVAReceptorId, CbtesAsoc,
+        // Tributos, Iva, Opcionales, Compradores, PeriodoAsoc) then the extension CAEA, CbteFchHsGen.
         const detRequest = {
             Concepto: voucherData.Concepto,
             DocTipo: voucherData.DocTipo,
@@ -394,22 +427,23 @@ export class ElectronicBillingRepository extends BaseSoapRepository implements I
             ImpTotConc: voucherData.ImpTotConc,
             ImpNeto: voucherData.ImpNeto,
             ImpOpEx: voucherData.ImpOpEx,
-            ImpIVA: voucherData.ImpIVA,
             ImpTrib: voucherData.ImpTrib,
+            ImpIVA: voucherData.ImpIVA,
             FchServDesde: voucherData.FchServDesde,
             FchServHasta: voucherData.FchServHasta,
             FchVtoPago: voucherData.FchVtoPago,
             MonId: voucherData.MonId,
             MonCotiz: voucherData.MonCotiz,
+            CanMisMonExt: voucherData.CanMisMonExt,
             CondicionIVAReceptorId: voucherData.CondicionIVAReceptorId,
+            CbtesAsoc: voucherData.CbtesAsoc ? { CbteAsoc: voucherData.CbtesAsoc } : undefined,
             Tributos: voucherData.Tributos ? { Tributo: voucherData.Tributos } : undefined,
             Iva: voucherData.Iva ? { AlicIva: voucherData.Iva } : undefined,
-            CbtesAsoc: voucherData.CbtesAsoc ? { CbteAsoc: voucherData.CbtesAsoc } : undefined,
-            Compradores: voucherData.Compradores ? { Comprador: voucherData.Compradores } : undefined,
             Opcionales: voucherData.Opcionales ? { Opcional: voucherData.Opcionales } : undefined,
+            Compradores: voucherData.Compradores ? { Comprador: voucherData.Compradores } : undefined,
+            PeriodoAsoc: undefined,
             CAEA: caea,
-            PeriodoAsoc: undefined as any,
-            CbteFchHsGen: undefined as any
+            CbteFchHsGen: undefined
         };
 
         const typedDetRequest = this.useSoap12 ? (detRequest as ServiceSoap12Types.IFECAEADetRequest) : (detRequest as ServiceSoapTypes.IFECAEADetRequest);

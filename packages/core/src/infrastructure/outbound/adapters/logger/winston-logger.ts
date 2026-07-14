@@ -19,7 +19,12 @@ export class WinstonLogger implements ILoggerPort {
   }
 
   error(message: string, error?: Error, meta?: any): void {
-    this.logger.error(message, { error, ...meta });
+    // An Error instance serializes to `{}` under winston's json format (its props are
+    // non-enumerable), so extract the message and stack explicitly to avoid losing them.
+    this.logger.error(message, {
+      ...(error ? { error: error.message, stack: error.stack } : {}),
+      ...meta,
+    });
   }
 
   warn(message: string, meta?: any): void {

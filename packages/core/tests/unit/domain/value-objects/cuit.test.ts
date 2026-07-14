@@ -1,8 +1,8 @@
 import { CUIT } from "@arcasdk/core/src/domain/value-objects/cuit.vo";
 
 describe("CUIT Value Object", () => {
-  const validCuitNumber = 20111111111;
-  const validCuitString = "20111111111";
+  const validCuitNumber = 20111111112;
+  const validCuitString = "20111111112";
 
   describe("create", () => {
     it("should create a valid CUIT from number", () => {
@@ -35,9 +35,16 @@ describe("CUIT Value Object", () => {
       expect(() => CUIT.create(0)).toThrow("CUIT inválido: debe tener 11 dígitos");
     });
 
+    it("should throw error if the verification digit is wrong", () => {
+      // 20111111111 has the right length but an invalid check digit (should be 2)
+      expect(() => CUIT.create(20111111111)).toThrow(
+        "dígito verificador incorrecto"
+      );
+    });
+
     it("should parse string correctly", () => {
-      const cuit = CUIT.create("20111111111");
-      expect(cuit.getValue()).toBe(20111111111);
+      const cuit = CUIT.create("20111111112");
+      expect(cuit.getValue()).toBe(20111111112);
     });
   });
 
@@ -59,12 +66,12 @@ describe("CUIT Value Object", () => {
   describe("toFormattedString", () => {
     it("should format CUIT with dashes", () => {
       const cuit = CUIT.create(validCuitNumber);
-      expect(cuit.toFormattedString()).toBe("20-11111111-1");
+      expect(cuit.toFormattedString()).toBe("20-11111111-2");
     });
 
     it("should format CUIT correctly for different values", () => {
-      const cuit = CUIT.create(27123456789);
-      expect(cuit.toFormattedString()).toBe("27-12345678-9");
+      const cuit = CUIT.create(27123456780);
+      expect(cuit.toFormattedString()).toBe("27-12345678-0");
     });
   });
 
@@ -76,8 +83,8 @@ describe("CUIT Value Object", () => {
     });
 
     it("should return false for different CUITs", () => {
-      const cuit1 = CUIT.create(20111111111);
-      const cuit2 = CUIT.create(27123456789);
+      const cuit1 = CUIT.create(20111111112);
+      const cuit2 = CUIT.create(27123456780);
       expect(cuit1.equals(cuit2)).toBe(false);
     });
 

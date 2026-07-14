@@ -48,7 +48,11 @@ export class FileSystemTicketStorage implements ITicketStoragePort {
       credentials: ticket.getCredentials(),
     };
 
-    await fs.writeFile(filePath, JSON.stringify(ticketData, null, 2), "utf8");
+    // Atomic write: write to a temp file then rename over the target. A crash mid-write can
+    // otherwise leave a half-written ticket that would brick auth on the next read.
+    const tmpPath = `${filePath}.${process.pid}.tmp`;
+    await fs.writeFile(tmpPath, JSON.stringify(ticketData, null, 2), "utf8");
+    await fs.rename(tmpPath, filePath);
   }
 
   async get(serviceName: string): Promise<AccessTicket | null> {
@@ -76,8 +80,12 @@ export class FileSystemTicketStorage implements ITicketStoragePort {
     try {
       const ticketData = JSON.parse(fileData);
       return AccessTicket.create(ticketData);
-    } catch (error: any) {
-      throw new Error(`Invalid access ticket format: ${error.message}`);
+    } catch {
+      // Corrupt/truncated ticket (e.g. an interrupted write) or invalid structure. Treat it as
+      // a cache miss and best-effort remove it, so a fresh ticket can be re-fetched and written
+      // instead of the bad file permanently bricking authentication.
+      await this.delete(serviceName).catch(() => undefined);
+      return null;
     }
   }
 

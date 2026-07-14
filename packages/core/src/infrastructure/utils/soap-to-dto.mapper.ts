@@ -35,6 +35,32 @@ export function mapSoapErrors(errors?: {
 }
 
 /**
+ * Map SOAP Observaciones (rejection/approval remarks) to Domain ErrorInfo[]
+ * ARCA returns the reason a voucher was rejected here (Resultado="R") — surfacing
+ * it (structured) is what lets callers see WHY a comprobante was not authorized.
+ */
+export function mapObservations(observaciones?: {
+  Obs?: Array<{ Code?: number; Msg: string }>;
+}): ErrorInfo[] | undefined {
+  if (!observaciones?.Obs?.length) return undefined;
+  return observaciones.Obs.map((o) => ({
+    code: o.Code ?? 0,
+    msg: o.Msg,
+  }));
+}
+
+/**
+ * Flatten every Observacion message into a single string (not just the first one).
+ * Kept as a string to preserve the existing `observaciones?: string` domain shape.
+ */
+export function flattenObservations(observaciones?: {
+  Obs?: Array<{ Msg: string }>;
+}): string | undefined {
+  const messages = observaciones?.Obs?.map((o) => o.Msg).filter(Boolean);
+  return messages && messages.length ? messages.join("; ") : undefined;
+}
+
+/**
  * Map SOAP server status to Domain ServerStatus
  */
 export function mapServerStatus(soapResult: {
@@ -128,7 +154,7 @@ export function mapVoucherInfo(soapResult: {
     fchVto: result.FchVto,
     fchProceso: result.FchProceso,
     resultado: result.Resultado,
-    observaciones: result.Observaciones?.Obs?.[0]?.Msg,
+    observaciones: flattenObservations(result.Observaciones),
     concepto: result.Concepto,
     docTipo: result.DocTipo,
     docNro: result.DocNro,
@@ -243,7 +269,7 @@ export function mapCaea(soapResult: {
     fchVigHasta: soapResult.FchVigHasta,
     fchTopeInf: soapResult.FchTopeInf,
     fchProceso: soapResult.FchProceso,
-    observaciones: soapResult.Observaciones?.Obs?.[0]?.Msg,
+    observaciones: flattenObservations(soapResult.Observaciones),
   };
 }
 
@@ -270,7 +296,7 @@ export function mapCaeaUsage(soapResult: {
     cbteHasta: soapResult.CbteHasta,
     cbteFch: soapResult.CbteFch,
     resultado: soapResult.Resultado,
-    observaciones: soapResult.Observaciones?.Obs?.[0]?.Msg,
+    observaciones: flattenObservations(soapResult.Observaciones),
   };
 }
 

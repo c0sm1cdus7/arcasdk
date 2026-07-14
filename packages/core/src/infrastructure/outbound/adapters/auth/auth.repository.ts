@@ -31,6 +31,11 @@ export class AuthRepository implements IAuthenticationRepositoryPort {
   private ticketStorage?: ITicketStoragePort;
   private manualCredentials?: ILoginCredentials;
 
+  /** In-flight WSAA logins keyed by service name, to dedup concurrent cold logins. */
+  private readonly inFlightLogins = new Map<string, Promise<AccessTicket>>();
+  /** Last uniqueId handed to a TRA, kept monotonic to avoid same-second collisions. */
+  private lastUniqueId = 0;
+
   private readonly soapClient: ISoapClientPort;
 
   constructor(config: AuthRepositoryConfig) {
@@ -72,9 +77,7 @@ export class AuthRepository implements IAuthenticationRepositoryPort {
       return AccessTicket.create(this.manualCredentials);
     }
 
-    const existingTicket = await this.getValidTicketFromStorage(serviceName);
-    if (existingTicket) return existingTicket;
-
+    // requestLogin already checks storage first, so no redundant read here.
     return this.requestLogin(serviceName);
   }
 
@@ -102,6 +105,25 @@ export class AuthRepository implements IAuthenticationRepositoryPort {
     const existingTicket = await this.getValidTicketFromStorage(serviceName);
     if (existingTicket) return existingTicket;
 
+    // Deduplicate concurrent cold logins for the same service. WSAA rejects a second TRA while
+    // the first is still valid ("El CEE ya posee un TA vigente"), and this also avoids racing
+    // writes to the ticket storage. Concurrent callers await the same in-flight request.
+    const inFlight = this.inFlightLogins.get(serviceName);
+    if (inFlight) return inFlight;
+
+    const loginPromise = this.performLogin(serviceName);
+    this.inFlightLogins.set(serviceName, loginPromise);
+    try {
+      return await loginPromise;
+    } finally {
+      this.inFlightLogins.delete(serviceName);
+    }
+  }
+
+  /**
+   * Perform the actual WSAA loginCms round-trip and persist the resulting ticket.
+   */
+  private async performLogin(serviceName: string): Promise<AccessTicket> {
     const signedTRA = this.signTRA(
       await Parser.jsonToXml(this.getTRA(serviceName))
     );
@@ -146,7 +168,7 @@ export class AuthRepository implements IAuthenticationRepositoryPort {
         $: { version: "1.0" },
         header: [
           {
-            uniqueId: [Math.floor(date.getTime() / 1000)],
+            uniqueId: [this.nextUniqueId()],
             generationTime: [new Date(date.getTime() - 600000).toISOString()],
             expirationTime: [new Date(date.getTime() + 600000).toISOString()],
           },
@@ -154,6 +176,17 @@ export class AuthRepository implements IAuthenticationRepositoryPort {
         service: [serviceName],
       },
     };
+  }
+
+  /**
+   * Monotonic uniqueId for the TRA. Seconds-resolution timestamps collide when two TRAs are
+   * generated within the same second; bumping past the last value guarantees uniqueness within
+   * the process while staying inside WSAA's unsignedInt range for decades.
+   */
+  private nextUniqueId(): number {
+    const now = Math.floor(Date.now() / 1000);
+    this.lastUniqueId = Math.max(now, this.lastUniqueId + 1);
+    return this.lastUniqueId;
   }
 
   /**

@@ -176,6 +176,81 @@ describe("Voucher Entity", () => {
         "Cotización de moneda (MonCotiz) debe ser mayor a cero."
       );
     });
+
+    it("should throw error if MonCotiz is not 1 for PES", () => {
+      const invalidData: IVoucher = {
+        ...data,
+        MonId: "PES",
+        MonCotiz: 1.5,
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        "Para moneda PES (pesos argentinos) la cotización (MonCotiz) debe ser 1."
+      );
+    });
+
+    it("should throw error if Concepto is Servicios but service dates are missing", () => {
+      const invalidData: IVoucher = {
+        ...data,
+        Concepto: 2,
+        FchServDesde: undefined,
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        "Para Concepto 2 (Servicios) o 3 (Productos y Servicios) se requieren FchServDesde, FchServHasta y FchVtoPago."
+      );
+    });
+
+    it("should throw error if a date is not in yyyymmdd format", () => {
+      const invalidData: IVoucher = {
+        ...data,
+        CbteFch: "2026-07-13",
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        'Fecha inválida en CbteFch ("2026-07-13"). Debe tener formato yyyymmdd.'
+      );
+    });
+
+    it("should throw error if a voucher number exceeds 8 digits", () => {
+      const invalidData: IVoucher = {
+        ...data,
+        CbteDesde: 100000000,
+        CbteHasta: 100000000,
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        "Los números de comprobante no pueden superar 99999999 (8 dígitos)."
+      );
+    });
+
+    it("should throw error if CanMisMonExt is not S or N", () => {
+      const invalidData: IVoucher = {
+        ...data,
+        CanMisMonExt: "X",
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        'CanMisMonExt inválido. Debe ser "S"'
+      );
+    });
+
+    it('should throw error if CanMisMonExt is "S" for a PES voucher', () => {
+      const invalidData: IVoucher = {
+        ...data,
+        MonId: "PES",
+        MonCotiz: 1,
+        CanMisMonExt: "S",
+      };
+      expect(() => Voucher.create(invalidData)).toThrow(
+        'CanMisMonExt="S" no es válido para comprobantes en pesos'
+      );
+    });
+
+    it("should accept a valid foreign-currency voucher collected in the same currency (CanMisMonExt=S)", () => {
+      const validData: IVoucher = {
+        ...data,
+        MonId: "DOL",
+        MonCotiz: 1000,
+        CanMisMonExt: "S",
+      };
+      expect(() => Voucher.create(validData)).not.toThrow();
+    });
   });
 
   describe("getters", () => {

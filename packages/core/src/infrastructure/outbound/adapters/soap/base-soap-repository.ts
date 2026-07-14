@@ -54,12 +54,21 @@ export abstract class BaseSoapRepository {
       injectAuthProperty = false,
       soapVersion = SoapServiceVersion.ServiceSoap12,
     } = options;
+    // client.describe() parses the entire WSDL; memoize it so it runs once per client
+    // instead of on every intercepted SOAP method call.
+    let describedServices: SoapServices<T> | undefined;
+    const getDescribedServices = (): SoapServices<T> => {
+      if (!describedServices) {
+        describedServices = (client as any).describe();
+      }
+      return describedServices as SoapServices<T>;
+    };
     return new Proxy(client, {
       get: (target: T, prop: string) => {
         const original = (target as any)[prop];
         if (typeof original === "function" && prop.endsWith("Async")) {
           const func = prop.slice(0, -5);
-          const soapServices: SoapServices<T> = (client as any).describe();
+          const soapServices: SoapServices<T> = getDescribedServices();
           const methodRequiresAuth =
             !options.excludeMethods?.includes(func) &&
             (!!options.authMapper ||

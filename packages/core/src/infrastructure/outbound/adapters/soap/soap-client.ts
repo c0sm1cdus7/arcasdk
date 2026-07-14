@@ -36,9 +36,14 @@ export class SoapClient implements ISoapClientPort {
       try {
         // Dynamic import to avoid issues in non-Node environments
         const https = await import("https");
+        const crypto = await import("crypto");
         const legacyHttpsAgent = new https.Agent({
           rejectUnauthorized: true,
           minDHSize: MIN_DH_SIZE_LEGACY,
+          // AFIP/ARCA legacy TLS endpoints require unsafe legacy renegotiation, which OpenSSL 3
+          // (Node 18+) disables by default → "unsafe legacy renegotiation disabled". This opt-in
+          // agent is exactly where that compatibility belongs.
+          secureOptions: crypto.constants.SSL_OP_LEGACY_SERVER_CONNECT,
         });
 
         finalOptions.wsdl_options = {

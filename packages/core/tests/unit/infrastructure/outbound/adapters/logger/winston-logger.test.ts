@@ -63,7 +63,7 @@ describe("WinstonLogger", () => {
   });
 
   describe("error", () => {
-    it("should log error message with error object", () => {
+    it("should log error message with error object (message + stack extracted)", () => {
       logger = new WinstonLogger({ enableLogging: true });
       const message = "Error message";
       const error = new Error("Test error");
@@ -72,7 +72,8 @@ describe("WinstonLogger", () => {
       logger.error(message, error, meta);
 
       expect(mockWinstonLogger.error).toHaveBeenCalledWith(message, {
-        error,
+        error: error.message,
+        stack: error.stack,
         key: "value",
       });
     });
@@ -85,7 +86,6 @@ describe("WinstonLogger", () => {
       logger.error(message, undefined, meta);
 
       expect(mockWinstonLogger.error).toHaveBeenCalledWith(message, {
-        error: undefined,
         key: "value",
       });
     });
@@ -98,7 +98,8 @@ describe("WinstonLogger", () => {
       logger.error(message, error);
 
       expect(mockWinstonLogger.error).toHaveBeenCalledWith(message, {
-        error,
+        error: error.message,
+        stack: error.stack,
       });
     });
   });
